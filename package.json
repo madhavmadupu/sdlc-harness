@@ -1,23 +1,45 @@
 {
   "name": "sdlc-harness",
   "version": "0.1.0",
-  "private": true,
+  "description": "Multi-agent SDLC harness with knowledge graph, quality gates, and swappable LLM backends",
   "type": "module",
+  "license": "MIT",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "sdlc",
+    "multi-agent",
+    "ai",
+    "software-development",
+    "knowledge-graph",
+    "opencode"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "sdlc-harness": "./dist/index.js"
+  },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
-    "zod": "^3.23.0"
+    "better-sqlite3": "^11.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

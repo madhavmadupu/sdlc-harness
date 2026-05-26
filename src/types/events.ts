@@ -1,5 +1,3 @@
-import type { z } from "zod";
-
 // ── Task identity ──────────────────────────────────────────
 
 export interface TaskId {
