@@ -1,6 +1,6 @@
 {
   "name": "sdlc-harness",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Multi-agent SDLC harness with knowledge graph, quality gates, and swappable LLM backends",
   "type": "module",
   "license": "MIT",
@@ -22,6 +22,7 @@
   ],
   "files": [
     "dist",
+    "webui/dist",
     "README.md",
     "LICENSE"
   ],
@@ -29,8 +30,11 @@
     "sdlc-harness": "dist/index.cjs"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && cd webui && npm run build",
+    "build:cli": "tsup",
+    "build:web": "cd webui && npm run build",
     "dev": "tsx src/index.ts",
+    "dev:web": "concurrently -n web,api -c cyan,green \"cd webui && npx vite\" \"tsx src/index.ts web --dev\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -41,11 +45,14 @@
   "dependencies": {
     "@unblessed/node": "^1.0.0-alpha.23",
     "better-sqlite3": "^11.0.0",
+    "hono": "^4.6.0",
+    "@hono/node-server": "^1.13.0",
     "opencode-ai": "^1.15.10"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
+    "concurrently": "^9.1.0",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

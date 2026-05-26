@@ -39,11 +39,18 @@ const DEFAULT_CONFIG: OrchestratorConfig = {
   model: undefined,
 };
 
+export type OrchestratorEvent =
+  | { type: "task-started"; taskId: string; title: string }
+  | { type: "task-completed"; taskId: string; outcome: "passed" | "failed" }
+  | { type: "feature-complete"; outcome: string }
+  | { type: "error"; message: string };
+
 export class Orchestrator {
   private graph: GraphStore;
   private memory: MemoryStore;
   private backend: OpencodeBackend;
   private config: OrchestratorConfig;
+  private onEvent?: (event: OrchestratorEvent) => void;
   private plannerSessionId: string | null = null;
 
   constructor(
@@ -51,11 +58,13 @@ export class Orchestrator {
     backend: OpencodeBackend,
     memory?: MemoryStore,
     config?: Partial<OrchestratorConfig>,
+    onEvent?: (event: OrchestratorEvent) => void,
   ) {
     this.graph = graph;
     this.memory = memory ?? new MemoryStore();
     this.backend = backend;
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.onEvent = onEvent;
   }
 
   // ── Run one feature through the entire SDLC ─────────────
@@ -104,6 +113,7 @@ export class Orchestrator {
         feature.status = "cancelled";
         feature.updatedAt = Date.now();
         this.graph.upsertNode(feature);
+        this.onEvent?.({ type: "feature-complete", outcome: "failed" });
         return { feature, tasks, results, outcome: "failed" };
       }
     }
@@ -114,7 +124,9 @@ export class Orchestrator {
     feature.updatedAt = Date.now();
     this.graph.upsertNode(feature);
 
-    return { feature, tasks, results, outcome: feature.status as FeatureResult["outcome"] };
+    const outcome = feature.status as FeatureResult["outcome"];
+    this.onEvent?.({ type: "feature-complete", outcome });
+    return { feature, tasks, results, outcome };
   }
 
   // ── Decompose feature → tasks ───────────────────────────
@@ -211,6 +223,8 @@ export class Orchestrator {
       phase: task.sdlcPhase,
       currentTaskId: task.id,
     });
+
+    this.onEvent?.({ type: "task-started", taskId: task.id, title: task.title });
 
     // Build the prompt with memory context
     const prompt = await this.buildTaskPrompt(task, feature);
@@ -327,6 +341,8 @@ export class Orchestrator {
             // Record successful pattern in process memory
             await this.recordTaskPattern(task, feature, summary, diff, role);
 
+            this.onEvent?.({ type: "task-completed", taskId: task.id, outcome: "passed" });
+
             return {
               outcome: "passed",
               taskId: task.id,
@@ -370,6 +386,8 @@ export class Orchestrator {
       status: "error",
       phase: "failed",
     });
+
+    this.onEvent?.({ type: "task-completed", taskId: task.id, outcome: "failed" });
 
     return {
       outcome: "failed",

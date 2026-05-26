@@ -8,6 +8,7 @@ import { initProject } from "./cli/init.ts";
 import { listMemories, showMemory, searchMemories, clearMemories, type MemoryOptions } from "./cli/memory.ts";
 import { watchFeature } from "./cli/watch.ts";
 import { configCommand } from "./cli/config.ts";
+import { startWebServer } from "./cli/web.ts";
 
 // ── Main ────────────────────────────────────────────────────
 
@@ -105,6 +106,11 @@ async function main() {
       await watchFeature(watchOpts);
       break;
     }
+    case "web": {
+      const webOpts = parseWebOptions(rest);
+      await startWebServer(webOpts);
+      break;
+    }
     case "config":
     case "cfg": {
       await configCommand(rest);
@@ -165,6 +171,7 @@ async function interactiveMode(): Promise<void> {
   const choices = [
     { key: "r", label: "Run a feature", desc: "Execute a feature through the SDLC pipeline" },
     { key: "w", label: "Watch a feature", desc: "Run a feature with live TUI dashboard" },
+    { key: "b", label: "Web dashboard", desc: "Open browser-based dashboard" },
     { key: "c", label: "Configuration", desc: "View/edit configuration settings" },
     { key: "s", label: "Check status", desc: "Show server health and knowledge graph status" },
     { key: "d", label: "Run doctor", desc: "Diagnose and fix common issues" },
@@ -182,7 +189,7 @@ async function interactiveMode(): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   const answer = await new Promise<string>((resolve) => {
-    rl.question(`\n  ${cyan("?")} ${bold("Choose an option")} ${dim("[r/w/c/s/d/i/h/q]")} ${dim("›")} `, (a) => {
+    rl.question(`\n  ${cyan("?")} ${bold("Choose an option")} ${dim("[r/w/b/c/s/d/i/h/q]")} ${dim("›")} `, (a) => {
       rl.close();
       resolve(a.trim().toLowerCase());
     });
@@ -221,6 +228,9 @@ async function interactiveMode(): Promise<void> {
       }
       break;
     }
+    case "b":
+      await startWebServer({ port: 4097, open: true });
+      break;
     case "c":
       await configCommand([]);
       break;
@@ -270,6 +280,32 @@ function parseWatchOptions(args: string[]): WatchCliOptions {
         if (!args[i].startsWith("-")) {
           opts.feature = opts.feature ? `${opts.feature} ${args[i]}` : args[i];
         }
+    }
+  }
+  return opts;
+}
+
+// ── Parse web options ──────────────────────────────────────
+
+function parseWebOptions(args: string[]): { port: number; dev?: boolean; db?: string; server?: string; open?: boolean } {
+  const opts: { port: number; dev?: boolean; db?: string; server?: string; open?: boolean } = { port: 4097 };
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--port":
+        opts.port = parseInt(args[++i], 10) || 4097;
+        break;
+      case "--db":
+        opts.db = args[++i];
+        break;
+      case "--server":
+        opts.server = args[++i];
+        break;
+      case "--dev":
+        opts.dev = true;
+        break;
+      case "--open":
+        opts.open = true;
+        break;
     }
   }
   return opts;

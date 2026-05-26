@@ -21,6 +21,7 @@ ${bold("USAGE")}
 ${bold("COMMANDS")}
   ${cyan("run")}       ${dim("<feature>")}   Run a feature through the SDLC
   ${cyan("watch")}     ${dim("<feature>")}   Run a feature with live TUI dashboard
+  ${cyan("web")}                           Start browser-based dashboard
   ${cyan("config")}    ${dim("[action]")}    View/edit configuration (${dim("get/set/list/delete")})
   ${cyan("status")}                       Show server, graph and memory status
   ${cyan("doctor")}                       Diagnose and fix common issues
@@ -36,12 +37,20 @@ ${bold("OPTIONS")}
   ${dim("--server")}      ${yellow("<url>")}       opencode server URL
   ${dim("--version")} ${dim("/")} ${cyan("-v")}           Show version
 
+${bold("WEB UI OPTIONS")}
+  ${dim("--port")}       ${yellow("<port>")}     Port to listen on (default: ${yellow("4097")})
+  ${dim("--open")}                           Open browser automatically
+  ${dim("--dev")}                            Enable CORS for Vite dev server
+
 ${bold("EXAMPLES")}
   ${dim("# Run a feature")}
   ${cyan("sdlc-harness")} ${green("run")} "${yellow("Add user authentication")}"
 
   ${dim("# Run with live dashboard")}
   ${cyan("sdlc-harness")} ${green("watch")} "${yellow("Add login page")}"
+
+  ${dim("# Start web dashboard")}
+  ${cyan("sdlc-harness")} ${green("web")}
 
   ${dim("# View config")}
   ${cyan("sdlc-harness")} ${green("config")} ${green("list")}
