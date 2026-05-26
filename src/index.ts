@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { createInterface } from "node:readline";
 import { bold, dim, green, red, yellow, cyan, magenta, header, divider, color } from "./cli/utils.ts";
 import { showHelp } from "./cli/help.ts";
