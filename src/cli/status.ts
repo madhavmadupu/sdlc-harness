@@ -1,6 +1,7 @@
 import { bold, dim, green, red, yellow, cyan, header, divider, section, item, success, error, info, createSpinner } from "./utils.ts";
 import { GraphStore } from "../graph/store.ts";
 import { NodeType } from "../graph/schema.ts";
+import { MemoryStore } from "../memory/store.ts";
 
 export interface StatusOptions {
   server?: string;
@@ -89,6 +90,22 @@ export async function status(opts: StatusOptions): Promise<void> {
   } catch {
     item("Database", dim("not found"));
     info("First run will create it automatically");
+  }
+
+  // Process memory
+  section("Process Memory");
+  try {
+    const memory = new MemoryStore(dbPath);
+    const memStats = memory.getStats();
+    item("Entries", String(memStats.totalEntries));
+    if (memStats.totalEntries > 0) {
+      item("Workflows", String(memStats.workflows));
+      item("Task patterns", String(memStats.taskPatterns));
+      item("Knowledge", String(memStats.knowledge));
+    }
+    memory.close();
+  } catch {
+    item("Entries", dim("unavailable"));
   }
 
   // Package version

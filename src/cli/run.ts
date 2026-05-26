@@ -2,6 +2,7 @@ import { GraphStore } from "../graph/store.ts";
 import { OpencodeBackend } from "../adapter/opencode.ts";
 import { Orchestrator } from "../orchestrator/index.ts";
 import { ServerManager } from "../server-manager.ts";
+import { MemoryStore } from "../memory/store.ts";
 import {
   bold,
   dim,
@@ -73,10 +74,11 @@ export async function runFeature(opts: RunOptions): Promise<void> {
     spinner.stop(green(`Connected to opencode at ${effectiveUrl}`));
   }
 
-  // Initialize graph
+  // Initialize graph + memory
   const graph = new GraphStore(dbPath);
+  const memory = new MemoryStore(dbPath);
   const backend = new OpencodeBackend(effectiveUrl);
-  const orchestrator = new Orchestrator(graph, backend, {
+  const orchestrator = new Orchestrator(graph, backend, memory, {
     model: modelObj,
   });
 

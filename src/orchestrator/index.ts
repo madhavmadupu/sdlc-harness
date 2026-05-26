@@ -13,30 +13,35 @@ import {
   type FeatureNode,
   type DecisionNode,
 } from "../graph/schema.ts";
+import { MemoryStore } from "../memory/store.ts";
 
 // ── Orchestrator ───────────────────────────────────────────
 //
 // Conducts the full SDLC for a feature:
 //   1. Decompose → writes tasks to the graph
 //   2. Assign   → picks agent role per task
-//   3. Execute  → runs task via OpencodeBackend
-//   4. Gate     → runs QA, may fork + retry
-//   5. Record   → writes results + reasoning to graph
+//   3. Recall   → checks process memory for successful patterns
+//   4. Execute  → runs task via OpencodeBackend (with memory context)
+//   5. Gate     → runs QA, may fork + retry
+//   6. Record   → writes results + reasoning to graph + memory
 
 export interface OrchestratorConfig {
   maxAttemptsPerTask: number;
   autoApprovePermissions: boolean;
+  memoryEnabled: boolean;
   model?: { providerID: string; modelID: string; variant?: string };
 }
 
 const DEFAULT_CONFIG: OrchestratorConfig = {
   maxAttemptsPerTask: 3,
   autoApprovePermissions: true,
+  memoryEnabled: true,
   model: undefined,
 };
 
 export class Orchestrator {
   private graph: GraphStore;
+  private memory: MemoryStore;
   private backend: OpencodeBackend;
   private config: OrchestratorConfig;
   private plannerSessionId: string | null = null;
@@ -44,9 +49,11 @@ export class Orchestrator {
   constructor(
     graph: GraphStore,
     backend: OpencodeBackend,
+    memory?: MemoryStore,
     config?: Partial<OrchestratorConfig>,
   ) {
     this.graph = graph;
+    this.memory = memory ?? new MemoryStore();
     this.backend = backend;
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -205,8 +212,8 @@ export class Orchestrator {
       currentTaskId: task.id,
     });
 
-    // Build the prompt
-    const prompt = this.buildTaskPrompt(task, feature);
+    // Build the prompt with memory context
+    const prompt = await this.buildTaskPrompt(task, feature);
 
     // Execute with fork-retry loop
     let attempt = 0;
@@ -317,6 +324,9 @@ export class Orchestrator {
               phase: "done",
             });
 
+            // Record successful pattern in process memory
+            await this.recordTaskPattern(task, feature, summary, diff, role);
+
             return {
               outcome: "passed",
               taskId: task.id,
@@ -398,8 +408,10 @@ export class Orchestrator {
     }
   }
 
-  private buildTaskPrompt(task: TaskNode, feature: FeatureNode): string {
-    return `You are implementing the following feature for the project.
+  private async buildTaskPrompt(task: TaskNode, feature: FeatureNode): Promise<string> {
+    const role = task.sdlcPhase === "testing" ? AgentRole.QA : AgentRole.Coder;
+
+    let prompt = `You are implementing the following feature for the project.
 
 Feature: ${feature.title}
 Description: ${feature.description}
@@ -411,8 +423,88 @@ SDLC Phase: ${task.sdlcPhase}
 Gate criteria: ${task.gateCriteria.join(", ")}
 
 Please implement this task. Follow existing code conventions. Handle edge cases.`;
+
+    // Inject relevant process memory
+    if (this.config.memoryEnabled) {
+      const memories = this.memory.search({
+        phase: task.sdlcPhase,
+        role,
+        keywords: this.extractKeywords(feature, task),
+        limit: 3,
+      });
+
+      if (memories.length > 0) {
+        prompt += `\n\n── PAST SUCCESSFUL PATTERNS ──\nThe following approaches worked well for similar tasks in the past. Review them and apply relevant patterns.\n\n`;
+        for (const mem of memories) {
+          prompt += `[${mem.category}] ${mem.title}\n${mem.summary}\n${mem.body}\n\n`;
+          this.memory.recordSuccess(mem.id);
+        }
+        prompt += `── END PAST PATTERNS ──\n`;
+      }
+    }
+
+    return prompt;
+  }
+
+  private async recordTaskPattern(
+    task: TaskNode,
+    feature: FeatureNode,
+    summary: string,
+    diff: string,
+    role: string,
+  ): Promise<void> {
+    if (!this.config.memoryEnabled) return;
+
+    const keywords = this.extractKeywords(feature, task);
+
+    // Extract a concise body from the diff (first 500 chars)
+    const bodyLines: string[] = [];
+    let charCount = 0;
+    for (const line of diff.split("\n")) {
+      if (charCount > 500) break;
+      bodyLines.push(line);
+      charCount += line.length + 1;
+    }
+
+    this.memory.insert({
+      category: "task_pattern",
+      phase: task.sdlcPhase,
+      role,
+      keywords,
+      title: `Pattern: ${task.title}`,
+      summary: summary || `Successfully completed ${task.title}`,
+      body: bodyLines.join("\n"),
+      sourceTaskId: task.id,
+      sourceFeatureId: feature.id,
+    });
+  }
+
+  private extractKeywords(feature: FeatureNode, task: TaskNode): string[] {
+    const words = new Set<string>();
+
+    // Extract words from titles and descriptions
+    const texts = [feature.title, feature.description, task.title, task.description];
+    for (const text of texts) {
+      const tokens = text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, "")
+        .split(/\s+/)
+        .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+      for (const t of tokens) words.add(t);
+    }
+
+    // Add phase-specific keywords
+    words.add(task.sdlcPhase);
+
+    return [...words].slice(0, 20);
   }
 }
+
+const STOP_WORDS = new Set([
+  "the", "this", "that", "and", "for", "with", "from", "have",
+  "will", "can", "all", "any", "are", "not", "but", "was",
+  "you", "your", "its", "has", "had", "been", "each", "some",
+]);
 
 // ── Result types ───────────────────────────────────────────
 

@@ -5,6 +5,7 @@ import { runFeature, type RunOptions } from "./cli/run.ts";
 import { status } from "./cli/status.ts";
 import { doctor } from "./cli/doctor.ts";
 import { initProject } from "./cli/init.ts";
+import { listMemories, showMemory, searchMemories, clearMemories, type MemoryOptions } from "./cli/memory.ts";
 
 // ── Main ────────────────────────────────────────────────────
 
@@ -38,6 +39,53 @@ async function main() {
     case "doctor":
     case "diagnose": {
       await doctor();
+      break;
+    }
+    case "memory":
+    case "mem": {
+      const memCmd = rest[0]?.toLowerCase();
+      const memRest = rest.slice(1);
+      const memOpts: MemoryOptions = {};
+
+      const memDbIdx = memRest.indexOf("--db");
+      if (memDbIdx >= 0) memOpts.db = memRest[memDbIdx + 1];
+
+      switch (memCmd) {
+        case "list":
+        case "ls": {
+          const cat = memRest[0] && !memRest[0].startsWith("-") ? memRest[0] : undefined;
+          await listMemories(memOpts, cat);
+          break;
+        }
+        case "show":
+        case "get": {
+          const id = memRest.find((a) => !a.startsWith("-"));
+          if (id) {
+            await showMemory(memOpts, id);
+          } else {
+            console.error(`  ${red("✘")} Usage: sdlc-harness memory show <id>`);
+          }
+          break;
+        }
+        case "search":
+        case "find": {
+          const query = memRest.filter((a) => !a.startsWith("-")).join(" ");
+          if (query) {
+            await searchMemories(memOpts, query);
+          } else {
+            console.error(`  ${red("✘")} Usage: sdlc-harness memory search <query>`);
+          }
+          break;
+        }
+        case "clear":
+        case "reset": {
+          await clearMemories(memOpts);
+          break;
+        }
+        default: {
+          await listMemories(memOpts);
+        }
+      }
       break;
     }
     case "init":
