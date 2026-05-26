@@ -184,6 +184,53 @@ export function info(message: string): void {
   console.log(`  ${cyan("ℹ")} ${message}`);
 }
 
+// ── TUI helpers ──────────────────────────────────────────────
+
+let tuiInitialized = false;
+
+export function tuiInit(): void {
+  if (!tuiInitialized) {
+    process.stdout.write("\x1b[?25l"); // hide cursor
+    tuiInitialized = true;
+  }
+}
+
+export function tuiCleanup(): void {
+  if (tuiInitialized) {
+    process.stdout.write("\x1b[?25h"); // show cursor
+    process.stdout.write("\x1b[0m");   // reset all
+    tuiInitialized = false;
+  }
+}
+
+export function tuiClear(): void {
+  process.stdout.write("\x1b[2J\x1b[H");
+}
+
+export function tuiMoveTo(row: number, col = 0): void {
+  process.stdout.write(`\x1b[${row};${col + 1}H`);
+}
+
+export function tuiClearLine(): void {
+  process.stdout.write("\x1b[K");
+}
+
+export function tuiWrite(row: number, col: number, text: string): void {
+  tuiMoveTo(row, col);
+  tuiClearLine();
+  process.stdout.write(text);
+}
+
+export function tuiColorRow(
+  row: number,
+  col: number,
+  label: string,
+  value: string,
+  valueColor = cyan,
+): void {
+  tuiWrite(row, col, `${dim(label)} ${valueColor(value)}`);
+}
+
 // ── Format helpers ──────────────────────────────────────────
 
 export function formatDuration(ms: number): string {

@@ -1,11 +1,13 @@
 import { createInterface } from "node:readline";
 import { bold, dim, green, red, yellow, cyan, magenta, header, divider, color } from "./cli/utils.ts";
-import { showHelp } from "./cli/help.ts";
+import { showHelp, getVersion } from "./cli/help.ts";
 import { runFeature, type RunOptions } from "./cli/run.ts";
 import { status } from "./cli/status.ts";
 import { doctor } from "./cli/doctor.ts";
 import { initProject } from "./cli/init.ts";
 import { listMemories, showMemory, searchMemories, clearMemories, type MemoryOptions } from "./cli/memory.ts";
+import { watchFeature } from "./cli/watch.ts";
+import { configCommand } from "./cli/config.ts";
 
 // ── Main ────────────────────────────────────────────────────
 
@@ -93,10 +95,30 @@ async function main() {
       await initProject(rest[0]);
       break;
     }
+    case "watch":
+    case "monitor": {
+      const watchOpts = parseWatchOptions(rest);
+      if (!watchOpts.feature) {
+        console.error(`  ${red("✘")} Usage: sdlc-harness watch <feature>`);
+        process.exit(1);
+      }
+      await watchFeature(watchOpts);
+      break;
+    }
+    case "config":
+    case "cfg": {
+      await configCommand(rest);
+      break;
+    }
     case "help":
     case "--help":
     case "-h": {
       showHelp();
+      break;
+    }
+    case "--version":
+    case "-v": {
+      console.log(`sdlc-harness v${getVersion()}`);
       break;
     }
     default: {
@@ -142,6 +164,8 @@ async function interactiveMode(): Promise<void> {
 
   const choices = [
     { key: "r", label: "Run a feature", desc: "Execute a feature through the SDLC pipeline" },
+    { key: "w", label: "Watch a feature", desc: "Run a feature with live TUI dashboard" },
+    { key: "c", label: "Configuration", desc: "View/edit configuration settings" },
     { key: "s", label: "Check status", desc: "Show server health and knowledge graph status" },
     { key: "d", label: "Run doctor", desc: "Diagnose and fix common issues" },
     { key: "i", label: "Init project", desc: "Set up sdlc-harness in this directory" },
@@ -158,7 +182,7 @@ async function interactiveMode(): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   const answer = await new Promise<string>((resolve) => {
-    rl.question(`\n  ${cyan("?")} ${bold("Choose an option")} ${dim("[r/s/d/i/h/q]")} ${dim("›")} `, (a) => {
+    rl.question(`\n  ${cyan("?")} ${bold("Choose an option")} ${dim("[r/w/c/s/d/i/h/q]")} ${dim("›")} `, (a) => {
       rl.close();
       resolve(a.trim().toLowerCase());
     });
@@ -182,6 +206,24 @@ async function interactiveMode(): Promise<void> {
       }
       break;
     }
+    case "w": {
+      const rl3 = createInterface({ input: process.stdin, output: process.stdout });
+      const feature = await new Promise<string>((resolve) => {
+        rl3.question(`  ${cyan("?")} ${bold("Feature title")} ${dim("›")} `, (a) => {
+          rl3.close();
+          resolve(a.trim());
+        });
+      });
+      if (feature) {
+        await watchFeature({ feature });
+      } else {
+        console.log(`  ${yellow("⚠")} No feature specified`);
+      }
+      break;
+    }
+    case "c":
+      await configCommand([]);
+      break;
     case "s":
       await status({});
       break;
@@ -200,6 +242,37 @@ async function interactiveMode(): Promise<void> {
     default:
       console.log(`  ${yellow("⚠")} Invalid option: ${answer}`);
   }
+}
+
+// ── Parse watch options ───────────────────────────────────
+
+interface WatchCliOptions {
+  feature: string;
+  model?: string;
+  db?: string;
+  server?: string;
+}
+
+function parseWatchOptions(args: string[]): WatchCliOptions {
+  const opts: WatchCliOptions = { feature: "" };
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--model":
+        opts.model = args[++i];
+        break;
+      case "--db":
+        opts.db = args[++i];
+        break;
+      case "--server":
+        opts.server = args[++i];
+        break;
+      default:
+        if (!args[i].startsWith("-")) {
+          opts.feature = opts.feature ? `${opts.feature} ${args[i]}` : args[i];
+        }
+    }
+  }
+  return opts;
 }
 
 // ── Parse run options ──────────────────────────────────────

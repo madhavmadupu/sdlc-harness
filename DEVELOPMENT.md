@@ -62,9 +62,13 @@ npm run publish:github    # → npm.pkg.github.com
 
 `src/index.ts` → uses subcommand dispatch:
 - `sdlc-harness run "feature"` — run feature
+- `sdlc-harness watch "feature"` — run feature with live TUI dashboard
 - `sdlc-harness status` — check health
 - `sdlc-harness doctor` — diagnose
 - `sdlc-harness init` — scaffold
+- `sdlc-harness config [action]` — view/edit config
+- `sdlc-harness memory [action]` — process memory queries
+- `sdlc-harness --version` or `-v` — show version
 - No args → interactive mode
 
 ## Project structure
@@ -73,14 +77,20 @@ npm run publish:github    # → npm.pkg.github.com
 src/
 ├── cli/              # CLI commands and utilities
 │   ├── run.ts        # sdlc-harness run
+│   ├── watch.ts      # sdlc-harness watch (TUI dashboard)
 │   ├── status.ts     # sdlc-harness status
 │   ├── doctor.ts     # sdlc-harness doctor
 │   ├── init.ts       # sdlc-harness init
+│   ├── config.ts     # sdlc-harness config
+│   ├── memory.ts     # sdlc-harness memory
 │   ├── help.ts       # sdlc-harness help
-│   └── utils.ts      # colors, spinners, prompts
+│   └── utils.ts      # colors, spinners, prompts, TUI helpers
+├── tui/              # Terminal UI components
+│   └── dashboard.ts  # Live feature monitoring dashboard
 ├── adapter/          # Backend provider adapters
 ├── agents/           # Agent role definitions
 ├── graph/            # Knowledge graph store + schema
+├── memory/           # Process memory (SQLite-backed)
 ├── orchestrator/     # SDLC orchestration logic
 ├── types/            # Shared type definitions
 ├── index.ts          # CLI entry point
