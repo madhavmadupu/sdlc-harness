@@ -40,7 +40,7 @@
     "test:watch": "vitest",
     "prepublishOnly": "npm run build && npm test",
     "publish:npm": "npm publish --registry=https://registry.npmjs.org --access public",
-    "publish:github": "npm publish --registry=https://npm.pkg.github.com"
+    "publish:github": "cp package.json package.json.bak && node -e \"const p=require('./package.json');p.name='@madhavmadupu/sdlc-harness';require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')\" && npm publish --registry=https://npm.pkg.github.com; r=$?; mv package.json.bak package.json; exit $r"
   },
   "dependencies": {
     "@unblessed/node": "^1.0.0-alpha.23",
