@@ -1,12 +1,12 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { createRequire } from "node:module";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { accessSync, constants } from "node:fs";
 import { createServer } from "node:net";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const _require = createRequire(import.meta.url);
+const _dirname = typeof __dirname !== "undefined"
+  ? __dirname
+  : dirname(fileURLToPath(import.meta.url));
 
 export interface ServerHandle {
   url: string;
@@ -126,7 +126,7 @@ export class ServerManager {
 
     // 2. Resolve from dependency tree (covers when opencode-ai is a dep)
     try {
-      const pkgPath = _require.resolve("opencode-ai/package.json");
+      const pkgPath = require.resolve("opencode-ai/package.json");
       const binPath = resolve(dirname(pkgPath), "bin", "opencode.exe");
       accessSync(binPath, constants.R_OK);
       return binPath;

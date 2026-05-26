@@ -1,7 +1,6 @@
-import { startDashboard, renderDashboard, type DashboardState } from "../tui/dashboard.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { createDashboard, type DashboardState } from "../tui/dashboard.ts";
 import { ServerManager } from "../server-manager.ts";
-import { bold, cyan, dim, green, red } from "./utils.ts";
+import { dim, red } from "./utils.ts";
 
 export interface WatchOptions {
   feature: string;
@@ -22,20 +21,22 @@ export async function watchFeature(opts: WatchOptions): Promise<void> {
     try {
       const handle = await manager.start();
       effectiveUrl = handle.url;
-      console.log(`  ${green("✔")} opencode server ready at ${effectiveUrl}`);
     } catch (err) {
       console.error(`  ${red("✘")} Failed to start opencode server: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
   }
 
+  const { MemoryStore } = await import("../memory/store.ts");
   const memory = new MemoryStore(dbPath);
   const startTime = Date.now();
+
+  let userQuit = false;
 
   const state: DashboardState = {
     feature: opts.feature,
     featureId: `feat_${Date.now()}`,
-    status: "running",
+    status: "starting",
     tasks: [],
     memoryStats: { total: 0, byCategory: {} },
     serverUrl: effectiveUrl,
@@ -43,64 +44,72 @@ export async function watchFeature(opts: WatchOptions): Promise<void> {
     elapsed: 0,
   };
 
-  const dashboard = startDashboard(
-    () => {
-      state.elapsed = Date.now() - startTime;
+  const dashboard = createDashboard(() => {
+    userQuit = true;
+  });
+  dashboard.update(state);
 
-      fetch(`${effectiveUrl}/global/health`)
-        .then((r) => { state.serverHealthy = r.ok; })
-        .catch(() => { state.serverHealthy = false; });
+  // Poll loop for dynamic state
+  const pollTimer = setInterval(() => {
+    state.elapsed = Date.now() - startTime;
 
-      try {
-        const allMemories = memory.search({});
-        state.memoryStats.total = allMemories.length;
-        const byCategory: Record<string, number> = {};
-        for (const m of allMemories) {
-          byCategory[m.category] = (byCategory[m.category] ?? 0) + 1;
-        }
-        state.memoryStats.byCategory = byCategory;
-      } catch {
-        // memory not ready yet
+    fetch(`${effectiveUrl}/global/health`)
+      .then((r) => { state.serverHealthy = r.ok; })
+      .catch(() => { state.serverHealthy = false; });
+
+    try {
+      const allMemories = memory.search({});
+      state.memoryStats.total = allMemories.length;
+      const byCategory: Record<string, number> = {};
+      for (const m of allMemories) {
+        byCategory[m.category] = (byCategory[m.category] ?? 0) + 1;
       }
+      state.memoryStats.byCategory = byCategory;
+    } catch {
+      // memory not ready
+    }
 
-      renderDashboard(state);
-    },
-    (key) => {
-      if (key === "q" || key === "\x03") {
-        dashboard.stop();
-        console.log(`\n  ${dim("Watch ended.")}`);
-        process.exit(0);
-      }
-    },
-  );
+    if (!userQuit) {
+      dashboard.update(state);
+    }
+  }, 1000);
 
-  const { Orchestrator } = await import("../orchestrator/index.ts");
-  const { GraphStore } = await import("../graph/store.ts");
-  const { OpencodeBackend } = await import("../adapter/opencode.ts");
-
-  const graph = new GraphStore(dbPath);
-  const backend = new OpencodeBackend(effectiveUrl);
-  const orchestrator = new Orchestrator(graph, backend, memory);
-  const feature = {
-    id: state.featureId,
-    title: opts.feature,
-    description: opts.feature,
-  };
+  // Run the feature
+  state.status = "running";
+  dashboard.update(state);
 
   try {
-    const result = await orchestrator.runFeature(feature);
+    const { Orchestrator } = await import("../orchestrator/index.ts");
+    const { GraphStore } = await import("../graph/store.ts");
+    const { OpencodeBackend } = await import("../adapter/opencode.ts");
+
+    const graph = new GraphStore(dbPath);
+    const backend = new OpencodeBackend(effectiveUrl);
+    const orchestrator = new Orchestrator(graph, backend, memory);
+
+    const result = await orchestrator.runFeature({
+      id: state.featureId,
+      title: opts.feature,
+      description: opts.feature,
+    });
+
     state.status = result.outcome === "done" ? "done" : "failed";
     state.tasks = result.tasks.map((t) => ({
       id: t.id,
       title: t.title,
       status: t.status,
+      outcome: t.status === "passed" ? "passed" : t.status === "failed" ? "failed" : undefined,
     }));
+    dashboard.update(state);
   } catch {
     state.status = "failed";
+    dashboard.update(state);
   }
 
-  // Let user see final state before closing
-  await new Promise((resolve) => setTimeout(resolve, 5000));
-  dashboard.stop();
-  console.log(`\n  ${dim("Feature completed with status:")} ${bold(state.status)}`);
+  clearInterval(pollTimer);
+
+  // Wait for user to press 'q'
+  while (!userQuit) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
 }

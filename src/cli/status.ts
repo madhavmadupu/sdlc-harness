@@ -1,3 +1,5 @@
+declare const __SDLC_HARNESS_VERSION__: string;
+
 import { bold, dim, green, red, yellow, cyan, header, divider, section, item, success, error, info, createSpinner } from "./utils.ts";
 import { GraphStore } from "../graph/store.ts";
 import { NodeType } from "../graph/schema.ts";
@@ -110,18 +112,13 @@ export async function status(opts: StatusOptions): Promise<void> {
 
   // Package version
   section("CLI");
-  try {
-    const pkg = JSON.parse(
-      await import("node:fs").then((fs) =>
-        fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-      ),
-    );
-    item("Version", `v${pkg.version}`);
-    item("Node.js", process.version);
-    item("Platform", process.platform);
-  } catch {
-    // noop
-  }
+  const version = (typeof __SDLC_HARNESS_VERSION__ !== "undefined"
+    ? __SDLC_HARNESS_VERSION__
+    : "?"
+  );
+  item("Version", `v${version}`);
+  item("Node.js", process.version);
+  item("Platform", process.platform);
 
   divider();
 }
