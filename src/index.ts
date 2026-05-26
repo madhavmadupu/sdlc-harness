@@ -1,18 +1,7 @@
 import { GraphStore } from "./graph/store.ts";
 import { OpencodeBackend } from "./adapter/opencode.ts";
 import { Orchestrator } from "./orchestrator/index.ts";
-import { readFileSync, existsSync } from "node:fs";
-
-// ── CLI entry point ────────────────────────────────────────
-//
-// Usage:
-//   npx tsx src/index.ts --feature "Add user authentication"
-//   npx tsx src/index.ts --feature "Add user auth" --model "opencode/big-pickle"
-//   npx tsx src/index.ts --health                  (check opencode server)
-//
-// Env:
-//   OPENCODE_SERVER   default: http://127.0.0.1:4096
-//   SDLC_DB           default: ./sdlc-harness.db
+import { ServerManager } from "./server-manager.ts";
 
 interface CliArgs {
   feature?: string;
@@ -62,11 +51,19 @@ function parseArgs(): CliArgs {
 
 async function main() {
   const opts = parseArgs();
-  const serverUrl = opts.server ?? process.env.OPENCODE_SERVER ?? "http://127.0.0.1:4096";
+  const serverUrl = opts.server ?? process.env.OPENCODE_SERVER;
   const dbPath = opts.db ?? process.env.SDLC_DB ?? "./sdlc-harness.db";
 
-  // Parse model: "providerID/modelID" → { id, providerID }
-  let modelObj: { providerID: string; modelID: string; variant?: string } | undefined;
+  // Show help immediately (no server needed)
+  if (opts.help || (!opts.feature && !opts.health)) {
+    showHelp();
+    return;
+  }
+
+  // Parse model: "providerID/modelID" → { providerID, modelID }
+  let modelObj:
+    | { providerID: string; modelID: string; variant?: string }
+    | undefined;
   if (opts.model) {
     const parts = opts.model.split("/");
     modelObj = {
@@ -75,102 +72,107 @@ async function main() {
     };
   }
 
-  if (opts.help || (!opts.feature && !opts.health)) {
-    showHelp(serverUrl);
-    return;
+  // Auto-start opencode server (or reuse existing one)
+  let effectiveUrl = serverUrl;
+  if (!effectiveUrl) {
+    const manager = new ServerManager();
+    manager.setupCleanup();
+    const handle = await manager.start();
+    effectiveUrl = handle.url;
+  } else {
+    // Verify user-specified server is reachable
+    const testRes = await fetch(`${effectiveUrl}/global/health`).catch(
+      () => null,
+    );
+    if (!testRes || !testRes.ok) {
+      console.error(`Cannot reach opencode server at ${effectiveUrl}`);
+      console.error(
+        `  Set OPENCODE_SERVER or omit it for auto-detection`,
+      );
+      process.exit(1);
+    }
   }
 
   const graph = new GraphStore(dbPath);
-  const backend = new OpencodeBackend(serverUrl);
+  const backend = new OpencodeBackend(effectiveUrl);
   const orchestrator = new Orchestrator(graph, backend, {
     model: modelObj,
   });
 
-  // Health check
+  // Health check (also ensures the server is ready)
   const health = await backend.health();
   if (!health.healthy) {
-    console.error(
-      `Cannot reach opencode server at ${serverUrl}. Is opencode serve running?`,
-    );
-    console.error(`  Start it: opencode serve --port 4096`);
+    console.error(`opencode server at ${effectiveUrl} is not healthy`);
     process.exit(1);
   }
-  console.log(`opencode server: ${serverUrl} (v${health.version ?? "?"})`);
 
   if (opts.health) {
-    console.log("System healthy.");
+    console.log(
+      `System healthy. Server: ${effectiveUrl} (v${health.version ?? "?"})`,
+    );
     return;
   }
 
   // Run a feature through the SDLC
-  if (opts.feature) {
-    const featureId =
-      opts.featureId ??
-      `feat_${Date.now()}`;
-    const feature = {
-      id: featureId,
-      title: opts.feature,
-      description:
-        opts.featureDesc ?? opts.feature,
-    };
+  const featureId = opts.featureId ?? `feat_${Date.now()}`;
+  const feature = {
+    id: featureId,
+    title: opts.feature!,
+    description: opts.featureDesc ?? opts.feature!,
+  };
 
-    console.log(`\nRunning feature: ${feature.title} (${feature.id})`);
-    console.log("─".repeat(50));
+  console.log(`\nRunning feature: ${feature.title} (${feature.id})`);
+  console.log("─".repeat(50));
 
-    const result = await orchestrator.runFeature(feature);
+  const result = await orchestrator.runFeature(feature);
 
-    console.log(`\nOutcome: ${result.outcome}`);
-    console.log("─".repeat(50));
+  console.log(`\nOutcome: ${result.outcome}`);
+  console.log("─".repeat(50));
 
-    for (const r of result.results) {
-      const icon = r.outcome === "passed" ? "✓" : "✗";
-      console.log(
-        `  ${icon} ${r.taskId}: ${r.outcome} (${r.attempts} attempt${r.attempts > 1 ? "s" : ""})`,
-      );
-      if (r.error) console.log(`     Error: ${r.error}`);
-    }
-
-    console.log("\nTasks created:");
-    for (const task of result.tasks) {
-      console.log(`  - ${task.id}: ${task.title} [${task.status}]`);
-    }
-
-    return;
+  for (const r of result.results) {
+    const icon = r.outcome === "passed" ? "✓" : "✗";
+    console.log(
+      `  ${icon} ${r.taskId}: ${r.outcome} (${r.attempts} attempt${r.attempts > 1 ? "s" : ""})`,
+    );
+    if (r.error) console.log(`     Error: ${r.error}`);
   }
 
-  // No feature specified — show available commands
-  showHelp(serverUrl);
+  console.log("\nTasks created:");
+  for (const task of result.tasks) {
+    console.log(`  - ${task.id}: ${task.title} [${task.status}]`);
+  }
 }
 
-function showHelp(serverUrl: string) {
+function showHelp() {
   console.log(`
 sdlc-harness — multi-agent SDLC harness
 
 USAGE
-  npx sdlc-harness --feature <title>       Run a feature
-  npx sdlc-harness --health                Check connectivity
-  npx sdlc-harness --help                  This message
+  npx sdlc-harness --feature <title>       Run a feature through the SDLC
+  npx sdlc-harness --health                Check system health
+  npx sdlc-harness --help                  Show this message
 
-REQUIREMENTS
-  opencode server at ${serverUrl}
-  Install: npm install -g opencode
-  Start:   opencode serve
+WHAT IT DOES
+  Starts an opencode server in the background, decomposes your feature
+  into implementation + QA tasks, assigns agents, executes with fork-retry
+  on failure, and records everything in a knowledge graph.
 
 OPTIONS
   --feature <title>     Feature to implement (e.g. "Add login page")
-  --feature-id <id>     Set feature ID (default: auto-generated)
+  --feature-id <id>     Explicit feature ID (default: auto-generated)
   --feature-desc <text> Feature description (default: same as title)
-  --model <model>       Model to use (e.g. opencode/big-pickle)
-  --health              Check opencode server health
-  --db <path>           Knowledge graph database path (default: ./sdlc-harness.db)
-  --server <url>        opencode server URL (default: http://127.0.0.1:4096)
+  --model <model>       Model override (e.g. opencode/gpt-4)
+  --health              Check connectivity
+  --db <path>           Knowledge graph database (default: ./sdlc-harness.db)
+  --server <url>        opencode server URL override for debugging
+  --help, -h            Show this message
 
 EXAMPLE
-  npx sdlc-harness --feature "Add README.md" --server http://localhost:4096
+  sdlc-harness --feature "Add a README.md"
 `);
 }
 
 main().catch((err) => {
-  console.error("Fatal:", err);
+  console.error("Fatal:", err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

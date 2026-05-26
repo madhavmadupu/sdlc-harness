@@ -1,5 +1,5 @@
 {
-  "name": "sdlc-harness",
+  "name": "@madhavmadupu/sdlc-harness",
   "version": "1.0.1",
   "description": "Multi-agent SDLC harness with knowledge graph, quality gates, and swappable LLM backends",
   "type": "module",
@@ -8,6 +8,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/madhavmadupu/sdlc-harness.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "keywords": [
     "sdlc",
@@ -34,7 +37,8 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.0.0",
+    "opencode-ai": "^1.15.10"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
