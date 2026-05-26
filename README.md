@@ -16,47 +16,48 @@ Built on [opencode](https://opencode.ai), providers are swappable through a clea
 - **Fork-retry resilience** — Failed tasks auto-fork sessions and retry up to configurable limits
 - **Provider-agnostic** — Opencode adapter included; extend with your own backend
 - **Health-aware** — Detects existing servers or auto-starts one on demand
+- **Interactive mode** — Run with no args for a guided menu
 
 ## Quick start
 
 ```bash
-# Start the opencode server
-opencode serve
+# Install
+npm install -g @madhavmadupu/sdlc-harness
 
-# Run a feature through the SDLC
-npx sdlc-harness --feature "Add user authentication"
+# Run a feature
+sdlc-harness run "Add user authentication"
 ```
 
 ## Requirements
 
-- [opencode](https://opencode.ai) v1.15+ running as a headless server (`opencode serve`)
+- [opencode](https://opencode.ai) v1.15+ (`npm install -g opencode-ai`)
 - Node.js 22+
-
-## Install
-
-```bash
-npm install -g @madhavmadupu/sdlc-harness
-```
-
-Or run directly with `npx`.
 
 ## Usage
 
+### CLI
+
 ```bash
-sdlc-harness --feature <title> [options]
+sdlc-harness run "Feature title"     Run a feature through the SDLC
+sdlc-harness status                  Check system health
+sdlc-harness doctor                  Diagnose and fix issues
+sdlc-harness init                    Initialize a project
+sdlc-harness                         Interactive mode
+```
+
+### Run options
+
+```bash
+sdlc-harness run "Add login" --model opencode/gpt-4 --db ./my-project.db
 ```
 
 | Option | Description |
 |---|---|
-| `--feature <title>` | Feature title to run through the SDLC |
-| `--feature-id <id>` | Explicit feature ID (auto-generated if omitted) |
-| `--feature-desc <text>` | Feature description (defaults to title) |
 | `--model <model>` | Model override (e.g. `opencode/gpt-4`) |
-| `--health` | Check opencode server health |
+| `--id <id>` | Explicit feature ID |
+| `--desc <text>` | Feature description |
 | `--db <path>` | Knowledge graph database path |
-| `--server <url>` | opencode server URL override |
-
-Environment variables: `OPENCODE_SERVER`, `SDLC_DB`.
+| `--server <url>` | opencode server URL |
 
 ## Architecture
 
@@ -84,7 +85,7 @@ Environment variables: `OPENCODE_SERVER`, `SDLC_DB`.
 | [Architecture](docs/architecture/overview.md) | System design, components, data flow |
 | [Knowledge graph](docs/architecture/knowledge-graph.md) | Schema, queries, graph traversal |
 | [Agent roles](docs/architecture/agent-roles.md) | Agent definitions, prompts, responsibilities |
-| [CLI reference](docs/reference/cli.md) | Full CLI options and environment variables |
+| [CLI reference](docs/reference/cli.md) | Full CLI commands, options, and environment variables |
 | [Contributing](docs/development/contributing.md) | Setup, testing, pull request guide |
 
 ## Development

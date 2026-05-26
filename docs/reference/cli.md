@@ -3,23 +3,80 @@
 ## Synopsis
 
 ```bash
-sdlc-harness --feature <title> [options]
-sdlc-harness --health
-sdlc-harness --help
+sdlc-harness [command] [options]
+sdlc-harness run <feature> [options]
+sdlc-harness status
+sdlc-harness doctor
+sdlc-harness init [directory]
+sdlc-harness help
 ```
 
-## Options
+## Commands
+
+### `run`
+
+Run a feature through the SDLC pipeline.
+
+```bash
+sdlc-harness run "Add user authentication"
+```
 
 | Option | Description |
 |---|---|
-| `--feature <title>` | Feature title to run through the SDLC |
-| `--feature-id <id>` | Explicit feature ID (auto-generated if omitted, format: `feat_<timestamp>`) |
-| `--feature-desc <text>` | Feature description (defaults to the title) |
 | `--model <model>` | Model override in `provider/model` format (e.g. `opencode/gpt-4`) |
-| `--health` | Check opencode server connectivity and health |
-| `--db <path>` | Path to the knowledge graph SQLite database (default: `./sdlc-harness.db`) |
+| `--id <id>` | Explicit feature ID (auto-generated if omitted) |
+| `--desc <text>` | Feature description (defaults to the title) |
+| `--db <path>` | Path to the knowledge graph SQLite database |
 | `--server <url>` | opencode server URL override |
-| `--help, -h` | Display help message |
+
+### `status` / `health`
+
+Check system health, server status, and knowledge graph statistics.
+
+```bash
+sdlc-harness status
+```
+
+### `doctor` / `diagnose`
+
+Run diagnostics to identify and fix common issues.
+
+```bash
+sdlc-harness doctor
+```
+
+Checks:
+- Node.js version (22+ required)
+- opencode CLI installation
+- opencode server connectivity
+- Knowledge graph database
+- Git repository
+
+### `init` / `setup`
+
+Initialize a project for SDLC Harness usage.
+
+```bash
+sdlc-harness init            # Current directory
+sdlc-harness init ./my-project  # Specific directory
+```
+
+Creates:
+- `.sdlc-harness.json` — project configuration
+- Updates `.gitignore` with database entries
+- Optionally creates `package.json`
+
+### `help`
+
+Display the full help reference.
+
+```bash
+sdlc-harness help
+```
+
+## Interactive mode
+
+Run `sdlc-harness` with no arguments to enter interactive mode, which presents a menu of available commands.
 
 ## Environment variables
 
@@ -32,21 +89,5 @@ sdlc-harness --help
 
 | Code | Meaning |
 |---|---|
-| 0 | Feature completed successfully or system healthy |
-| 1 | Fatal error (server unreachable, unhealthy, or crash) |
-
-## Examples
-
-```bash
-# Run a feature
-sdlc-harness --feature "Add login page"
-
-# Specify a model
-sdlc-harness --feature "Add search" --model opencode/deepseek-v4
-
-# Custom database path
-sdlc-harness --feature "Refactor auth" --db ./my-project.db
-
-# Health check
-sdlc-harness --health
-```
+| 0 | Success |
+| 1 | Fatal error (server unreachable, crash, or invalid args) |

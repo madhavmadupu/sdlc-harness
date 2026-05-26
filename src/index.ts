@@ -1,42 +1,159 @@
-import { GraphStore } from "./graph/store.ts";
-import { OpencodeBackend } from "./adapter/opencode.ts";
-import { Orchestrator } from "./orchestrator/index.ts";
-import { ServerManager } from "./server-manager.ts";
+#!/usr/bin/env node
 
-interface CliArgs {
-  feature?: string;
-  model?: string;
-  health?: boolean;
-  help?: boolean;
-  db?: string;
-  server?: string;
-  featureId?: string;
-  featureDesc?: string;
+import { createInterface } from "node:readline";
+import { bold, dim, green, red, yellow, cyan, magenta, header, divider, color } from "./cli/utils.ts";
+import { showHelp } from "./cli/help.ts";
+import { runFeature, type RunOptions } from "./cli/run.ts";
+import { status } from "./cli/status.ts";
+import { doctor } from "./cli/doctor.ts";
+import { initProject } from "./cli/init.ts";
+
+// ── Main ────────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.length === 0) {
+    await interactiveMode();
+    return;
+  }
+
+  const command = args[0].toLowerCase();
+  const rest = args.slice(1);
+
+  switch (command) {
+    case "run": {
+      const opts = parseRunOptions(rest);
+      await runFeature(opts);
+      break;
+    }
+    case "status":
+    case "health": {
+      const serverIdx = rest.indexOf("--server");
+      const dbIdx = rest.indexOf("--db");
+      await status({
+        server: serverIdx >= 0 ? rest[serverIdx + 1] : undefined,
+        db: dbIdx >= 0 ? rest[dbIdx + 1] : undefined,
+      });
+      break;
+    }
+    case "doctor":
+    case "diagnose": {
+      await doctor();
+      break;
+    }
+    case "init":
+    case "setup": {
+      await initProject(rest[0]);
+      break;
+    }
+    case "help":
+    case "--help":
+    case "-h": {
+      showHelp();
+      break;
+    }
+    default: {
+      // Try treating the first arg as a feature title (backwards compat)
+      if (!command.startsWith("-")) {
+        const opts = parseRunOptions(args);
+        opts.feature = args.join(" ");
+        await runFeature(opts);
+      } else {
+        console.error(`  ${red("✘")} Unknown command: ${bold(command)}`);
+        console.error(`  ${dim("Run")} ${cyan("sdlc-harness help")} ${dim("to see available commands")}`);
+        process.exit(1);
+      }
+    }
+  }
 }
 
-function parseArgs(): CliArgs {
-  const args = process.argv.slice(2);
-  const opts: CliArgs = {};
+// ── Interactive mode ────────────────────────────────────────
+
+async function interactiveMode(): Promise<void> {
+  console.log(`
+  ${bold(cyan("sdlc-harness"))} ${dim("— Multi-agent SDLC harness")}
+
+  ${dim("What would you like to do?")}
+  `);
+
+  const choices = [
+    { key: "r", label: "Run a feature", desc: "Execute a feature through the SDLC pipeline" },
+    { key: "s", label: "Check status", desc: "Show server health and knowledge graph status" },
+    { key: "d", label: "Run doctor", desc: "Diagnose and fix common issues" },
+    { key: "i", label: "Init project", desc: "Set up sdlc-harness in this directory" },
+    { key: "h", label: "Show help", desc: "View full command reference" },
+    { key: "q", label: "Quit", desc: "Exit" },
+  ];
+
+  for (const c of choices) {
+    const shortcut = c.key === "q" ? dim("q") : cyan(c.key);
+    console.log(`    ${shortcut}) ${bold(c.label)}`);
+    console.log(`       ${dim(c.desc)}`);
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  const answer = await new Promise<string>((resolve) => {
+    rl.question(`\n  ${cyan("?")} ${bold("Choose an option")} ${dim("[r/s/d/i/h/q]")} ${dim("›")} `, (a) => {
+      rl.close();
+      resolve(a.trim().toLowerCase());
+    });
+  });
+
+  console.log();
+
+  switch (answer) {
+    case "r": {
+      const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+      const feature = await new Promise<string>((resolve) => {
+        rl2.question(`  ${cyan("?")} ${bold("Feature title")} ${dim("›")} `, (a) => {
+          rl2.close();
+          resolve(a.trim());
+        });
+      });
+      if (feature) {
+        await runFeature({ feature });
+      } else {
+        console.log(`  ${yellow("⚠")} No feature specified`);
+      }
+      break;
+    }
+    case "s":
+      await status({});
+      break;
+    case "d":
+      await doctor();
+      break;
+    case "i":
+      await initProject();
+      break;
+    case "h":
+      showHelp();
+      break;
+    case "q":
+      console.log(`  ${dim("Goodbye!")}`);
+      break;
+    default:
+      console.log(`  ${yellow("⚠")} Invalid option: ${answer}`);
+  }
+}
+
+// ── Parse run options ──────────────────────────────────────
+
+function parseRunOptions(args: string[]): RunOptions {
+  const opts: RunOptions = { feature: "" };
+
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case "--feature":
-        opts.feature = args[++i];
-        break;
-      case "--feature-id":
-        opts.featureId = args[++i];
-        break;
-      case "--feature-desc":
-        opts.featureDesc = args[++i];
-        break;
       case "--model":
         opts.model = args[++i];
         break;
-      case "--health":
-        opts.health = true;
+      case "--id":
+        opts.featureId = args[++i];
         break;
-      case "--help":
-      case "-h":
-        opts.help = true;
+      case "--desc":
+        opts.featureDesc = args[++i];
         break;
       case "--db":
         opts.db = args[++i];
@@ -44,135 +161,19 @@ function parseArgs(): CliArgs {
       case "--server":
         opts.server = args[++i];
         break;
+      default:
+        if (!args[i].startsWith("-")) {
+          opts.feature = opts.feature ? `${opts.feature} ${args[i]}` : args[i];
+        }
     }
   }
+
   return opts;
 }
 
-async function main() {
-  const opts = parseArgs();
-  const serverUrl = opts.server ?? process.env.OPENCODE_SERVER;
-  const dbPath = opts.db ?? process.env.SDLC_DB ?? "./sdlc-harness.db";
-
-  // Show help immediately (no server needed)
-  if (opts.help || (!opts.feature && !opts.health)) {
-    showHelp();
-    return;
-  }
-
-  // Parse model: "providerID/modelID" → { providerID, modelID }
-  let modelObj:
-    | { providerID: string; modelID: string; variant?: string }
-    | undefined;
-  if (opts.model) {
-    const parts = opts.model.split("/");
-    modelObj = {
-      providerID: parts[0] ?? "opencode",
-      modelID: parts[1] ?? parts[0] ?? "big-pickle",
-    };
-  }
-
-  // Auto-start opencode server (or reuse existing one)
-  let effectiveUrl = serverUrl;
-  if (!effectiveUrl) {
-    const manager = new ServerManager();
-    manager.setupCleanup();
-    const handle = await manager.start();
-    effectiveUrl = handle.url;
-  } else {
-    // Verify user-specified server is reachable
-    const testRes = await fetch(`${effectiveUrl}/global/health`).catch(
-      () => null,
-    );
-    if (!testRes || !testRes.ok) {
-      console.error(`Cannot reach opencode server at ${effectiveUrl}`);
-      console.error(
-        `  Set OPENCODE_SERVER or omit it for auto-detection`,
-      );
-      process.exit(1);
-    }
-  }
-
-  const graph = new GraphStore(dbPath);
-  const backend = new OpencodeBackend(effectiveUrl);
-  const orchestrator = new Orchestrator(graph, backend, {
-    model: modelObj,
-  });
-
-  // Health check (also ensures the server is ready)
-  const health = await backend.health();
-  if (!health.healthy) {
-    console.error(`opencode server at ${effectiveUrl} is not healthy`);
-    process.exit(1);
-  }
-
-  if (opts.health) {
-    console.log(
-      `System healthy. Server: ${effectiveUrl} (v${health.version ?? "?"})`,
-    );
-    return;
-  }
-
-  // Run a feature through the SDLC
-  const featureId = opts.featureId ?? `feat_${Date.now()}`;
-  const feature = {
-    id: featureId,
-    title: opts.feature!,
-    description: opts.featureDesc ?? opts.feature!,
-  };
-
-  console.log(`\nRunning feature: ${feature.title} (${feature.id})`);
-  console.log("─".repeat(50));
-
-  const result = await orchestrator.runFeature(feature);
-
-  console.log(`\nOutcome: ${result.outcome}`);
-  console.log("─".repeat(50));
-
-  for (const r of result.results) {
-    const icon = r.outcome === "passed" ? "✓" : "✗";
-    console.log(
-      `  ${icon} ${r.taskId}: ${r.outcome} (${r.attempts} attempt${r.attempts > 1 ? "s" : ""})`,
-    );
-    if (r.error) console.log(`     Error: ${r.error}`);
-  }
-
-  console.log("\nTasks created:");
-  for (const task of result.tasks) {
-    console.log(`  - ${task.id}: ${task.title} [${task.status}]`);
-  }
-}
-
-function showHelp() {
-  console.log(`
-sdlc-harness — multi-agent SDLC harness
-
-USAGE
-  npx sdlc-harness --feature <title>       Run a feature through the SDLC
-  npx sdlc-harness --health                Check system health
-  npx sdlc-harness --help                  Show this message
-
-WHAT IT DOES
-  Starts an opencode server in the background, decomposes your feature
-  into implementation + QA tasks, assigns agents, executes with fork-retry
-  on failure, and records everything in a knowledge graph.
-
-OPTIONS
-  --feature <title>     Feature to implement (e.g. "Add login page")
-  --feature-id <id>     Explicit feature ID (default: auto-generated)
-  --feature-desc <text> Feature description (default: same as title)
-  --model <model>       Model override (e.g. opencode/gpt-4)
-  --health              Check connectivity
-  --db <path>           Knowledge graph database (default: ./sdlc-harness.db)
-  --server <url>        opencode server URL override for debugging
-  --help, -h            Show this message
-
-EXAMPLE
-  sdlc-harness --feature "Add a README.md"
-`);
-}
+// ── Execute ─────────────────────────────────────────────────
 
 main().catch((err) => {
-  console.error("Fatal:", err instanceof Error ? err.message : String(err));
+  console.error(`\n  ${red("✘")} ${bold("Fatal:")} ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });
