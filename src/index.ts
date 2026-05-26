@@ -18,6 +18,7 @@ interface CliArgs {
   feature?: string;
   model?: string;
   health?: boolean;
+  help?: boolean;
   db?: string;
   server?: string;
   featureId?: string;
@@ -44,6 +45,10 @@ function parseArgs(): CliArgs {
       case "--health":
         opts.health = true;
         break;
+      case "--help":
+      case "-h":
+        opts.help = true;
+        break;
       case "--db":
         opts.db = args[++i];
         break;
@@ -68,6 +73,11 @@ async function main() {
       providerID: parts[0] ?? "opencode",
       modelID: parts[1] ?? parts[0] ?? "big-pickle",
     };
+  }
+
+  if (opts.help || (!opts.feature && !opts.health)) {
+    showHelp(serverUrl);
+    return;
   }
 
   const graph = new GraphStore(dbPath);
@@ -129,15 +139,34 @@ async function main() {
   }
 
   // No feature specified — show available commands
+  showHelp(serverUrl);
+}
+
+function showHelp(serverUrl: string) {
   console.log(`
-Usage:
-  --feature <title>     Run a feature through the SDLC
+sdlc-harness — multi-agent SDLC harness
+
+USAGE
+  npx sdlc-harness --feature <title>       Run a feature
+  npx sdlc-harness --health                Check connectivity
+  npx sdlc-harness --help                  This message
+
+REQUIREMENTS
+  opencode server at ${serverUrl}
+  Install: npm install -g opencode
+  Start:   opencode serve
+
+OPTIONS
+  --feature <title>     Feature to implement (e.g. "Add login page")
   --feature-id <id>     Set feature ID (default: auto-generated)
   --feature-desc <text> Feature description (default: same as title)
   --model <model>       Model to use (e.g. opencode/big-pickle)
   --health              Check opencode server health
-  --db <path>           Knowledge graph database path
-  --server <url>        opencode server URL
+  --db <path>           Knowledge graph database path (default: ./sdlc-harness.db)
+  --server <url>        opencode server URL (default: http://127.0.0.1:4096)
+
+EXAMPLE
+  npx sdlc-harness --feature "Add README.md" --server http://localhost:4096
 `);
 }
 
