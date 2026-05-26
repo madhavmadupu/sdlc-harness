@@ -54,6 +54,23 @@ async function main() {
       break;
     }
     default: {
+      // Backward compat: --feature "title" → run
+      if (command === "--feature") {
+        const opts = parseRunOptions(rest);
+        opts.feature = rest.join(" ").replace(/^--feature\s*/i, "").trim();
+        if (opts.feature) {
+          await runFeature(opts);
+        } else {
+          console.error(`  ${red("✘")} --feature requires a feature title`);
+          process.exit(1);
+        }
+        break;
+      }
+      // Backward compat: --health → status
+      if (command === "--health" || command === "health") {
+        await status({});
+        break;
+      }
       // Try treating the first arg as a feature title (backwards compat)
       if (!command.startsWith("-")) {
         const opts = parseRunOptions(args);
