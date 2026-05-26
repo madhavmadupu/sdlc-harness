@@ -30,7 +30,7 @@
     "sdlc-harness": "dist/index.cjs"
   },
   "scripts": {
-    "build": "tsup && cd webui && npm run build",
+    "build": "tsup && cd webui && npm install && npm run build",
     "build:cli": "tsup",
     "build:web": "cd webui && npm run build",
     "dev": "tsx src/index.ts",
