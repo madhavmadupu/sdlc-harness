@@ -1,6 +1,6 @@
 {
   "name": "sdlc-harness",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Multi-agent SDLC harness with knowledge graph, quality gates, and swappable LLM backends",
   "type": "module",
   "license": "MIT",
